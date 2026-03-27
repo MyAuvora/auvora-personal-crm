@@ -602,6 +602,11 @@ async def convert_lead_to_customer(
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
 
+    # Prevent duplicate conversion
+    cursor = await db.execute("SELECT id FROM customers WHERE lead_id = ?", (lead_id,))
+    if await cursor.fetchone():
+        raise HTTPException(status_code=409, detail="Lead has already been converted to a customer")
+
     lead_dict = row_to_dict(lead)
     now = datetime.utcnow().isoformat()
     today = now[:10]
