@@ -437,7 +437,7 @@ def _gen_invoices(customer: dict, plan_price: float) -> list:
 
         invoices.append({
             "amount": plan_price,
-            "status": "paid" if is_paid else ("overdue" if is_overdue else "pending"),
+            "status": "paid" if is_paid else "pending",
             "invoice_date": inv_date.strftime("%Y-%m-%d"),
             "due_date": due_date.strftime("%Y-%m-%d"),
             "paid_date": (inv_date + timedelta(days=random.randint(1, 10))).strftime("%Y-%m-%d") if is_paid else None,
@@ -450,75 +450,74 @@ def _gen_invoices(customer: dict, plan_price: float) -> list:
 
 async def seed_demo_data():
     """Seed the database with demo data. Clears existing data first."""
-    db = await aiosqlite.connect(DB_PATH)
-    db.row_factory = aiosqlite.Row
-    await db.execute("PRAGMA foreign_keys=ON")
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        await db.execute("PRAGMA foreign_keys=ON")
 
-    # Clear existing data (order matters due to foreign keys)
-    await db.execute("DELETE FROM invoices")
-    await db.execute("DELETE FROM activities")
-    await db.execute("DELETE FROM customers")
-    await db.execute("DELETE FROM plans")
-    await db.execute("DELETE FROM leads")
-    await db.commit()
+        # Clear existing data (order matters due to foreign keys)
+        await db.execute("DELETE FROM invoices")
+        await db.execute("DELETE FROM activities")
+        await db.execute("DELETE FROM customers")
+        await db.execute("DELETE FROM plans")
+        await db.execute("DELETE FROM leads")
+        await db.commit()
 
-    # Seed plans
-    plan_ids = {}
-    now = datetime.utcnow().isoformat()
-    for plan in PLANS:
-        cursor = await db.execute(
-            "INSERT INTO plans (name, price, billing_cycle, features, is_active, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-            (plan["name"], plan["price"], plan["billing_cycle"], plan["features"], plan["is_active"], now),
-        )
-        plan_ids[plan["name"]] = cursor.lastrowid
-
-    # Seed leads
-    lead_ids = {}
-    for lead in LEADS:
-        created = (datetime.utcnow() - timedelta(days=lead["days_ago"])).isoformat()
-        cursor = await db.execute(
-            """INSERT INTO leads (name, email, phone, business_name, business_type, source, status, priority, notes, created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (lead["name"], lead["email"], lead["phone"], lead["business_name"], lead["business_type"],
-             lead["source"], lead["status"], lead["priority"], lead["notes"], created, created),
-        )
-        lead_id = cursor.lastrowid
-        lead_ids[lead["name"]] = lead_id
-
-        # Add activities
-        for act in _gen_activities(lead["status"], lead["days_ago"]):
-            await db.execute(
-                "INSERT INTO activities (lead_id, type, description, created_at) VALUES (?, ?, ?, ?)",
-                (lead_id, act["type"], act["description"], act["created_at"]),
+        # Seed plans
+        plan_ids = {}
+        now = datetime.utcnow().isoformat()
+        for plan in PLANS:
+            cursor = await db.execute(
+                "INSERT INTO plans (name, price, billing_cycle, features, is_active, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+                (plan["name"], plan["price"], plan["billing_cycle"], plan["features"], plan["is_active"], now),
             )
+            plan_ids[plan["name"]] = cursor.lastrowid
 
-    # Seed customers
-    for cust in CUSTOMERS:
-        plan_id = plan_ids.get(cust["plan_name"])
-        lead_id = lead_ids.get(cust["name"])
-        start_date = (datetime.utcnow() - timedelta(days=cust["start_date_days_ago"])).strftime("%Y-%m-%d")
-        created = (datetime.utcnow() - timedelta(days=cust["start_date_days_ago"])).isoformat()
-
-        cursor = await db.execute(
-            """INSERT INTO customers (name, email, phone, business_name, business_type, plan_id, status, lead_id, monthly_rate, start_date, notes, created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (cust["name"], cust["email"], cust["phone"], cust["business_name"], cust["business_type"],
-             plan_id, cust["status"], lead_id, cust["monthly_rate"], start_date, cust["notes"], created, created),
-        )
-        customer_id = cursor.lastrowid
-
-        # Generate invoices for this customer
-        plan_price = cust["monthly_rate"]
-        for inv in _gen_invoices(cust, plan_price):
-            await db.execute(
-                """INSERT INTO invoices (customer_id, amount, status, invoice_date, due_date, paid_date, description, notes, created_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (customer_id, inv["amount"], inv["status"], inv["invoice_date"], inv["due_date"],
-                 inv["paid_date"], inv["description"], inv["notes"], datetime.utcnow().isoformat()),
+        # Seed leads
+        lead_ids = {}
+        for lead in LEADS:
+            created = (datetime.utcnow() - timedelta(days=lead["days_ago"])).isoformat()
+            cursor = await db.execute(
+                """INSERT INTO leads (name, email, phone, business_name, business_type, source, status, priority, notes, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (lead["name"], lead["email"], lead["phone"], lead["business_name"], lead["business_type"],
+                 lead["source"], lead["status"], lead["priority"], lead["notes"], created, created),
             )
+            lead_id = cursor.lastrowid
+            lead_ids[lead["name"]] = lead_id
 
-    await db.commit()
-    await db.close()
+            # Add activities
+            for act in _gen_activities(lead["status"], lead["days_ago"]):
+                await db.execute(
+                    "INSERT INTO activities (lead_id, type, description, created_at) VALUES (?, ?, ?, ?)",
+                    (lead_id, act["type"], act["description"], act["created_at"]),
+                )
+
+        # Seed customers
+        for cust in CUSTOMERS:
+            plan_id = plan_ids.get(cust["plan_name"])
+            lead_id = lead_ids.get(cust["name"])
+            start_date = (datetime.utcnow() - timedelta(days=cust["start_date_days_ago"])).strftime("%Y-%m-%d")
+            created = (datetime.utcnow() - timedelta(days=cust["start_date_days_ago"])).isoformat()
+
+            cursor = await db.execute(
+                """INSERT INTO customers (name, email, phone, business_name, business_type, plan_id, status, lead_id, monthly_rate, start_date, notes, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (cust["name"], cust["email"], cust["phone"], cust["business_name"], cust["business_type"],
+                 plan_id, cust["status"], lead_id, cust["monthly_rate"], start_date, cust["notes"], created, created),
+            )
+            customer_id = cursor.lastrowid
+
+            # Generate invoices for this customer
+            plan_price = cust["monthly_rate"]
+            for inv in _gen_invoices(cust, plan_price):
+                await db.execute(
+                    """INSERT INTO invoices (customer_id, amount, status, invoice_date, due_date, paid_date, description, notes, created_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (customer_id, inv["amount"], inv["status"], inv["invoice_date"], inv["due_date"],
+                     inv["paid_date"], inv["description"], inv["notes"], datetime.utcnow().isoformat()),
+                )
+
+        await db.commit()
 
     return {
         "plans": len(PLANS),
