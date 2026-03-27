@@ -1,10 +1,13 @@
 from fastapi import FastAPI, Depends, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import Optional
 from contextlib import asynccontextmanager
 import aiosqlite
 from datetime import datetime
+import os
 
 from app.database import get_db, init_db
 
@@ -334,3 +337,19 @@ async def list_activities(
     )
     rows = await cursor.fetchall()
     return [row_to_dict(r) for r in rows]
+
+
+# --- Serve React Frontend ---
+
+STATIC_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static")
+if os.path.isdir(STATIC_DIR):
+    app.mount("/assets", StaticFiles(directory=os.path.join(STATIC_DIR, "assets")), name="static-assets")
+
+    @app.get("/{full_path:path}")
+    async def serve_frontend(full_path: str):
+        # Try to serve the exact file first
+        file_path = os.path.join(STATIC_DIR, full_path)
+        if full_path and os.path.isfile(file_path):
+            return FileResponse(file_path)
+        # Fall back to index.html for SPA routing
+        return FileResponse(os.path.join(STATIC_DIR, "index.html"))
