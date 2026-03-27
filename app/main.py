@@ -626,19 +626,16 @@ async def convert_lead_to_customer(
         (lead_dict["name"], lead_dict["email"], lead_dict["phone"], lead_dict["business_name"],
          lead_dict["business_type"], req.plan_id, "active", lead_id, monthly_rate, today, req.notes, now, now),
     )
-    await db.commit()
     customer_id = cursor.lastrowid
 
     # Update lead status to won
     await db.execute("UPDATE leads SET status = 'won', updated_at = ? WHERE id = ?", (now, lead_id))
-    await db.commit()
 
     # Log activity on the lead
     await db.execute(
         "INSERT INTO activities (lead_id, type, description) VALUES (?, ?, ?)",
         (lead_id, "converted", f"Converted to customer #{customer_id}"),
     )
-    await db.commit()
 
     # Create first invoice
     due_date = (datetime.utcnow() + timedelta(days=30)).strftime("%Y-%m-%d")
@@ -647,6 +644,8 @@ async def convert_lead_to_customer(
            VALUES (?, ?, ?, ?, ?, ?, ?)""",
         (customer_id, monthly_rate, "pending", today, due_date, "First month subscription", now),
     )
+
+    # Single atomic commit for entire conversion
     await db.commit()
 
     cursor = await db.execute("SELECT c.*, p.name as plan_name FROM customers c LEFT JOIN plans p ON c.plan_id = p.id WHERE c.id = ?", (customer_id,))

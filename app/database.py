@@ -70,7 +70,7 @@ async def init_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (plan_id) REFERENCES plans(id),
-            FOREIGN KEY (lead_id) REFERENCES leads(id)
+            FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE SET NULL
         );
 
         CREATE TABLE IF NOT EXISTS invoices (
