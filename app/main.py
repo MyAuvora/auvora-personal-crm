@@ -896,6 +896,15 @@ async def get_revenue_stats(db: aiosqlite.Connection = Depends(get_db)):
     return stats
 
 
+# --- Seed Demo Data ---
+
+@app.post("/api/seed-demo-data")
+async def seed_demo():
+    from app.seed_data import seed_demo_data
+    result = await seed_demo_data()
+    return result
+
+
 # --- Serve React Frontend ---
 
 STATIC_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static")
