@@ -835,10 +835,23 @@ async def get_revenue_stats(db: aiosqlite.Connection = Depends(get_db)):
 
     # Monthly revenue trend (last 6 months)
     trend = []
+    now = datetime.utcnow()
     for i in range(5, -1, -1):
-        month_start = (datetime.utcnow().replace(day=1) - timedelta(days=i * 30)).strftime("%Y-%m-01")
-        month_end = (datetime.utcnow().replace(day=1) - timedelta(days=(i - 1) * 30)).strftime("%Y-%m-01")
-        month_label = (datetime.utcnow().replace(day=1) - timedelta(days=i * 30)).strftime("%b")
+        # Calculate month offset with proper calendar arithmetic
+        year = now.year
+        month = now.month - i
+        while month <= 0:
+            month += 12
+            year -= 1
+        month_start = f"{year:04d}-{month:02d}-01"
+        # Next month boundary
+        next_month = month + 1
+        next_year = year
+        if next_month > 12:
+            next_month = 1
+            next_year += 1
+        month_end = f"{next_year:04d}-{next_month:02d}-01"
+        month_label = datetime(year, month, 1).strftime("%b")
         cursor = await db.execute(
             "SELECT COALESCE(SUM(amount), 0) FROM invoices WHERE status = 'paid' AND paid_date >= ? AND paid_date < ?",
             (month_start, month_end),
