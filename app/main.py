@@ -535,6 +535,14 @@ async def get_customer(customer_id: int, db: aiosqlite.Connection = Depends(get_
 
 @app.post("/api/customers", status_code=201)
 async def create_customer(customer: CustomerCreate, db: aiosqlite.Connection = Depends(get_db)):
+    if customer.plan_id is not None:
+        cursor = await db.execute("SELECT id FROM plans WHERE id = ?", (customer.plan_id,))
+        if not await cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Plan not found")
+    if customer.lead_id is not None:
+        cursor = await db.execute("SELECT id FROM leads WHERE id = ?", (customer.lead_id,))
+        if not await cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Lead not found")
     now = datetime.utcnow().isoformat()
     start = customer.start_date or now[:10]
     cursor = await db.execute(
@@ -564,7 +572,9 @@ async def update_customer(customer_id: int, update: CustomerUpdate, db: aiosqlit
             fields_to_update[field] = value
 
     if not fields_to_update:
-        return row_to_dict(existing)
+        cursor = await db.execute("SELECT c.*, p.name as plan_name FROM customers c LEFT JOIN plans p ON c.plan_id = p.id WHERE c.id = ?", (customer_id,))
+        row = await cursor.fetchone()
+        return row_to_dict(row)
 
     fields_to_update["updated_at"] = datetime.utcnow().isoformat()
     set_clause = ", ".join(f"{k} = ?" for k in fields_to_update)
@@ -613,10 +623,12 @@ async def convert_lead_to_customer(
 
     # Determine monthly rate from plan or request
     monthly_rate = req.monthly_rate
-    if req.plan_id and monthly_rate == 0:
+    if req.plan_id:
         cursor = await db.execute("SELECT price FROM plans WHERE id = ?", (req.plan_id,))
         plan_row = await cursor.fetchone()
-        if plan_row:
+        if not plan_row:
+            raise HTTPException(status_code=404, detail="Plan not found")
+        if monthly_rate == 0:
             monthly_rate = plan_row[0]
 
     # Create customer from lead
@@ -757,7 +769,12 @@ async def update_invoice(invoice_id: int, update: InvoiceUpdate, db: aiosqlite.C
         fields_to_update["paid_date"] = datetime.utcnow().strftime("%Y-%m-%d")
 
     if not fields_to_update:
-        return row_to_dict(existing)
+        cursor = await db.execute(
+            "SELECT i.*, c.name as customer_name, c.business_name as customer_business FROM invoices i LEFT JOIN customers c ON i.customer_id = c.id WHERE i.id = ?",
+            (invoice_id,),
+        )
+        row = await cursor.fetchone()
+        return row_to_dict(row)
 
     set_clause = ", ".join(f"{k} = ?" for k in fields_to_update)
     values = list(fields_to_update.values()) + [invoice_id]
