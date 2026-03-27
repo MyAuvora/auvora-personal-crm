@@ -571,6 +571,11 @@ async def update_customer(customer_id: int, update: CustomerUpdate, db: aiosqlit
         if value is not None:
             fields_to_update[field] = value
 
+    if "plan_id" in fields_to_update:
+        cursor = await db.execute("SELECT id FROM plans WHERE id = ?", (fields_to_update["plan_id"],))
+        if not await cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Plan not found")
+
     if not fields_to_update:
         cursor = await db.execute("SELECT c.*, p.name as plan_name FROM customers c LEFT JOIN plans p ON c.plan_id = p.id WHERE c.id = ?", (customer_id,))
         row = await cursor.fetchone()
