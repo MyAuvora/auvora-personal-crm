@@ -67,6 +67,15 @@ async def init_db():
             monthly_rate REAL DEFAULT 0,
             start_date TEXT,
             notes TEXT DEFAULT '',
+            industry_crm TEXT DEFAULT '',
+            payment_card_type TEXT DEFAULT '',
+            payment_card_last4 TEXT DEFAULT '',
+            payment_card_expiry TEXT DEFAULT '',
+            billing_address TEXT DEFAULT '',
+            contract_status TEXT DEFAULT 'pending',
+            contract_date TEXT,
+            contract_type TEXT DEFAULT '',
+            contract_url TEXT DEFAULT '',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (plan_id) REFERENCES plans(id),
@@ -96,5 +105,23 @@ async def init_db():
         CREATE INDEX IF NOT EXISTS idx_invoices_status ON invoices(status);
         CREATE INDEX IF NOT EXISTS idx_invoices_due ON invoices(due_date);
     """)
+    # Migrate existing databases: add new customer columns if missing
+    migrate_columns = [
+        ("industry_crm", "TEXT DEFAULT ''"),
+        ("payment_card_type", "TEXT DEFAULT ''"),
+        ("payment_card_last4", "TEXT DEFAULT ''"),
+        ("payment_card_expiry", "TEXT DEFAULT ''"),
+        ("billing_address", "TEXT DEFAULT ''"),
+        ("contract_status", "TEXT DEFAULT 'pending'"),
+        ("contract_date", "TEXT"),
+        ("contract_type", "TEXT DEFAULT ''"),
+        ("contract_url", "TEXT DEFAULT ''"),
+    ]
+    for col_name, col_type in migrate_columns:
+        try:
+            await db.execute(f"ALTER TABLE customers ADD COLUMN {col_name} {col_type}")
+        except Exception:
+            pass  # Column already exists
+
     await db.commit()
     await db.close()

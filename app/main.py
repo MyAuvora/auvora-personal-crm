@@ -89,6 +89,15 @@ class CustomerCreate(BaseModel):
     monthly_rate: float = 0
     start_date: Optional[str] = None
     notes: str = ""
+    industry_crm: str = ""
+    payment_card_type: str = ""
+    payment_card_last4: str = ""
+    payment_card_expiry: str = ""
+    billing_address: str = ""
+    contract_status: str = "pending"
+    contract_date: Optional[str] = None
+    contract_type: str = ""
+    contract_url: str = ""
 
 
 class CustomerUpdate(BaseModel):
@@ -101,6 +110,15 @@ class CustomerUpdate(BaseModel):
     status: Optional[str] = None
     monthly_rate: Optional[float] = None
     notes: Optional[str] = None
+    industry_crm: Optional[str] = None
+    payment_card_type: Optional[str] = None
+    payment_card_last4: Optional[str] = None
+    payment_card_expiry: Optional[str] = None
+    billing_address: Optional[str] = None
+    contract_status: Optional[str] = None
+    contract_date: Optional[str] = None
+    contract_type: Optional[str] = None
+    contract_url: Optional[str] = None
 
 
 class InvoiceCreate(BaseModel):
@@ -546,10 +564,14 @@ async def create_customer(customer: CustomerCreate, db: aiosqlite.Connection = D
     now = datetime.utcnow().isoformat()
     start = customer.start_date or now[:10]
     cursor = await db.execute(
-        """INSERT INTO customers (name, email, phone, business_name, business_type, plan_id, status, lead_id, monthly_rate, start_date, notes, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        """INSERT INTO customers (name, email, phone, business_name, business_type, plan_id, status, lead_id, monthly_rate, start_date, notes,
+           industry_crm, payment_card_type, payment_card_last4, payment_card_expiry, billing_address,
+           contract_status, contract_date, contract_type, contract_url, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (customer.name, customer.email, customer.phone, customer.business_name, customer.business_type,
-         customer.plan_id, customer.status, customer.lead_id, customer.monthly_rate, start, customer.notes, now, now),
+         customer.plan_id, customer.status, customer.lead_id, customer.monthly_rate, start, customer.notes,
+         customer.industry_crm, customer.payment_card_type, customer.payment_card_last4, customer.payment_card_expiry,
+         customer.billing_address, customer.contract_status, customer.contract_date, customer.contract_type, customer.contract_url, now, now),
     )
     await db.commit()
     customer_id = cursor.lastrowid
